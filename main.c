@@ -58,7 +58,7 @@ typedef struct
     {
         struct
         {
-            uint8_t  type_and_channel;
+            uint8_t  status;
             uint16_t params;
             size_t   nparams;
         } MIDI_channel_ev;
@@ -68,14 +68,14 @@ typedef struct
             uint8_t  meta_type;
             uint32_t len;
             const uint8_t *data;
-        } Meta_event;
+        } Meta_ev;
         
         struct
         {
             uint8_t  sysex_type;
             uint32_t len;
             const uint8_t *data;
-        } Sysex_event;
+        } Sysex_ev;
     };
 } Event;
 
@@ -123,6 +123,17 @@ static void set_timediv(MThd *mthd)
         mthd->timediv.fps.smpte = (int8_t)((raw >> 8) & 0xFF);
         mthd->timediv.fps.ticks = (uint8_t)(raw & 0xFF);
     }
+}
+
+static int event_status_check(uint8_t status)
+{
+    int channel = (int) (status & 0x0F);
+    int ev      = (int) ((status & 0xF0) >> 4);
+
+    if (channel < 0 || channel > 15) return 0;
+    if (ev < NOTE_OFF || ev > PITCH_BEND) return 0;
+    
+    return 1;
 }
 
 static uint32_t parse_delta_time(uint8_t buf[], int *status, int *out_len)
@@ -180,6 +191,7 @@ static int parse_mtrk(MIDI_file *midi, MThd *mthd, FILE *f)
 
     mtrk->size = chunk_size;
     uint32_t bytes_read = 0;
+    uint8_t running_status = 0;
     while (bytes_read < chunk_size)
     {
         // read the delta time of the event
@@ -187,7 +199,7 @@ static int parse_mtrk(MIDI_file *midi, MThd *mthd, FILE *f)
         // four bytes, but since the delta time is a
         // VLQ, reposition it correctly before reading
         // other data
-        int start = ftell(f);
+        long start = ftell(f);
         fread(buf, sizeof(buf), 1, f);
         int status, nbytes_delta;
         uint32_t delta_time = parse_delta_time(buf, &status, &nbytes_delta);
@@ -199,7 +211,54 @@ static int parse_mtrk(MIDI_file *midi, MThd *mthd, FILE *f)
         ev->delta_time = delta_time;
         bytes_read += nbytes_delta;
         fseek(f, start + nbytes_delta, SEEK_SET);
-        // TODO: start reading the event lol
+
+        fread(buf, sizeof(buf)-3, 1, f);
+        // if greater than 0x80, the running status
+        // will be overwritten by this new one
+        if (buf[0] >= 0x80)
+        {
+            // meta event
+            if (buf[0] == 0xFF)
+            {
+                ev->kind = EV_META;
+                
+            }
+            // sysex event
+            else if (buf[0] == 0xF0 || buf[0] == 0xF7)
+            {
+                ev->kind = EV_SYSEX;
+                // TODO...
+            }
+            // midi channel event
+            else
+            {
+                ev->kind = EV_CH;
+                if (!event_status_check(buf[0])) return 0;
+
+                ev->MIDI_channel_ev.status = buf[0];
+                running_status = buf[0];
+                bytes_read++;
+                int type = (int) ((buf[0] & 0xF0) >> 4);
+                uint8_t params[2];
+                if (type == PROGRAM_CHANGE || type == CHANNEL_AFTERTOUCH)
+                {
+                    // here we need to parse just one param
+                    fread(params, sizeof(params)-1, 1, f);
+                    ev->MIDI_channel_ev.params = (uint16_t)params[0];
+                    bytes_read += 1;
+                }
+                else
+                {
+                    fread(params, sizeof(params), 1, f);
+                    ev->MIDI_channel_ev.params = ((uint16_t)params[1] << 8) | params[0];
+                    bytes_read += 2;
+                }
+            }
+        }
+        else
+        {
+            // TODO...
+        }
     }
 }
 

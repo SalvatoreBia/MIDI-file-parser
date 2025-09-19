@@ -1,30 +1,45 @@
 CC = gcc
-CFLAGS = -Wall -O2
-LIBS = -lm
-TARGET = main
-SOURCE = main.c
+CFLAGS = -Wall -Wextra -std=c99 -Iinclude
+LDFLAGS = 
 
-.PHONY: all clean setup install test
+SRCDIR = src
+INCDIR = include
+OBJDIR = obj
+
+SOURCES = main.c $(SRCDIR)/midi_parser.c $(SRCDIR)/json_generator.c
+OBJECTS = $(SOURCES:.c=.o)
+
+TARGET = midi_parser
 
 all: $(TARGET)
 
-$(TARGET): $(SOURCE)
-	$(CC) $(CFLAGS) -o $(TARGET) $(SOURCE) $(LIBS)
+$(OBJDIR):
+	mkdir -p $(OBJDIR)
 
-setup: $(TARGET)
-	pip3 install --user -r requirements.txt
+$(TARGET): $(OBJECTS)
+	$(CC) $(OBJECTS) -o $(TARGET) $(LDFLAGS)
 
-install: setup
-	@echo "Installation complete!"
-	@echo "Usage: ./$(TARGET) file.mid && python3 midi_importer.py file.json"
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(TARGET)
+	rm -f $(OBJECTS) $(TARGET)
+
+rebuild: clean all
+
+install: $(TARGET)
+	cp $(TARGET) /usr/local/bin/
+
+uninstall:
+	rm -f /usr/local/bin/$(TARGET)
 
 help:
 	@echo "Available targets:"
-	@echo "  all     - Compile the C parser"
-	@echo "  setup   - Compile and install Python dependencies"
-	@echo "  install - Complete setup with instructions"
-	@echo "  clean   - Remove compiled binary"
-	@echo "  help    - Show this help"
+	@echo "  all      - Build the executable (default)"
+	@echo "  clean    - Remove object files and executable"
+	@echo "  rebuild  - Clean and build"
+	@echo "  install  - Install to /usr/local/bin/"
+	@echo "  uninstall- Remove from /usr/local/bin/"
+	@echo "  help     - Show this help message"
+
+.PHONY: all clean rebuild install uninstall help

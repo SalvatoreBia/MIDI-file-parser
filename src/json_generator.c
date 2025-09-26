@@ -60,13 +60,14 @@ static const char* get_meta_event_name(uint8_t type)
     case 0x07: return "Cue Point";
     case 0x09: return "Device Name";
     case 0x20: return "MIDI Channel Prefix";
+    case 0x21: return "MIDI port";
     case 0x2F: return "End of Track";
     case 0x51: return "Set Tempo";
     case 0x54: return "SMPTE Offset";
     case 0x58: return "Time Signature";
     case 0x59: return "Key Signature";
     case 0x7F: return "Sequencer Specific";
-    default: return "Unknown Meta Event";
+    default:   return "Unknown Meta Event";
     }
 }
 
@@ -141,6 +142,10 @@ static void write_meta_event(FILE *fp, const Meta_event *meta)
             
         case 0x20:
             fprintf(fp, "        \"channel\": %u\n", data[0]);
+            break;
+
+        case 0x21:
+            fprintf(fp, "        \"port\": %u\n", data[0]);
             break;
             
         case 0x2F:

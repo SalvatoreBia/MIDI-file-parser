@@ -156,9 +156,11 @@ int parse_MTrk_meta_event(MTrk *mtrk, FILE *fp, uint32_t *bytes_read)
     int code; uint32_t len_bytes;
     uint32_t len = get_VLQ(fp, &code, &len_bytes);
     if (code < 0) return 0;
+    mtrk->events[idx].ev.meta_ev.len = len;
     (*bytes_read) += len_bytes;
 
     uint8_t buf[4];
+    printf("type -> %d\n", type);
     switch (type)
     {
     case 0x00:
@@ -201,6 +203,18 @@ int parse_MTrk_meta_event(MTrk *mtrk, FILE *fp, uint32_t *bytes_read)
 
         if (fread(val, 1, 1, fp) != 1) { free(val); return 0; }
         if (*(uint8_t*)val > 15) { free(val); return 0; }
+        mtrk->events[idx].ev.meta_ev.data = val;
+        (*bytes_read)++;
+        break;
+    }
+
+    case 0x21:
+    {
+        if (len != 1) return 0;
+        void *val = malloc(1);
+        if (!val) return 0;
+
+        if (fread(val, 1, 1, fp) != 1) { free(val); return 0; }
         mtrk->events[idx].ev.meta_ev.data = val;
         (*bytes_read)++;
         break;
